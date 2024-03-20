@@ -2,7 +2,6 @@ package bus
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/xid"
 )
