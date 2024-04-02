@@ -7,14 +7,64 @@ import (
 	"github.com/google/uuid"
 )
 
-type Event struct {
+var _ Event = eventData{}
+
+type Event interface {
+	ID() uuid.UUID
+	Date() time.Time
+	Name() string
+	Data() []byte
+}
+
+type eventData struct {
+	id   uuid.UUID
+	date time.Time
+	name string
+	data []byte
+}
+
+func newEventData(e eventMessage) eventData {
+	return eventData{
+		id:   e.ID,
+		date: e.Date,
+		name: e.Name,
+		data: e.Data,
+	}
+}
+
+func (e eventData) ID() uuid.UUID {
+	return e.id
+}
+
+func (e eventData) Date() time.Time {
+	return e.date
+}
+
+func (e eventData) Name() string {
+	return e.name
+}
+
+func (e eventData) Data() []byte {
+	return e.data
+}
+
+type eventMessage struct {
 	ID   uuid.UUID       `json:"id,omitempty"`
 	Date time.Time       `json:"date,omitempty"`
 	Name string          `json:"name,omitempty"`
 	Data json.RawMessage `json:"data,omitempty"`
 }
 
-func (e *Event) Validate() error {
+func newEventMessage(event Event) eventMessage {
+	return eventMessage{
+		ID:   event.ID(),
+		Date: event.Date(),
+		Name: event.Name(),
+		Data: event.Data(),
+	}
+}
+
+func (e eventMessage) validate() error {
 	if e.ID == uuid.Nil {
 		return ErrMissingID
 	}
@@ -25,35 +75,4 @@ func (e *Event) Validate() error {
 		return ErrMissingName
 	}
 	return nil
-}
-
-func (e *Event) SetData(data interface{}) error {
-	raw, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	e.Data = raw
-
-	return nil
-}
-
-func (e *Event) GetData(data interface{}) error {
-	return json.Unmarshal(e.Data, data)
-}
-
-func NewRawEvent(name string, data json.RawMessage) Event {
-	return Event{
-		ID:   uuid.New(),
-		Date: time.Now(),
-		Name: name,
-		Data: data,
-	}
-}
-
-func NewEvent(name string, data interface{}) (Event, error) {
-	e := NewRawEvent(name, nil)
-	err := e.SetData(data)
-
-	return e, err
 }

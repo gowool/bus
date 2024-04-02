@@ -3,6 +3,9 @@ package bus
 import (
 	"context"
 	"errors"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -14,12 +17,13 @@ var (
 )
 
 type Error struct {
-	ID       string `json:"id,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Group    string `json:"group,omitempty"`
-	Consumer string `json:"consumer,omitempty"`
-	Err      error  `json:"error,omitempty"`
-	Event    *Event `json:"event,omitempty"`
+	ID        string    `json:"id,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Group     string    `json:"group,omitempty"`
+	Consumer  string    `json:"consumer,omitempty"`
+	Err       error     `json:"error,omitempty"`
+	EventID   uuid.UUID `json:"event_id,omitempty"`
+	EventDate time.Time `json:"event_date,omitempty"`
 }
 
 func NewError(name, group, consumer string) *Error {
@@ -40,8 +44,13 @@ func (e *Error) SetErr(err error) *Error {
 	return e
 }
 
-func (e *Error) SetEvent(event Event) *Error {
-	e.Event = &event
+func (e *Error) SetEventID(eventID uuid.UUID) *Error {
+	e.EventID = eventID
+	return e
+}
+
+func (e *Error) SetEventDate(eventDate time.Time) *Error {
+	e.EventDate = eventDate
 	return e
 }
 
@@ -59,10 +68,7 @@ func (e *Error) Error() string {
 	}
 
 	str += "; Name: " + e.Name + "; Group: " + e.Group + "; Consumer: " + e.Consumer
-
-	if e.Event != nil {
-		str += "; Event: [" + e.Event.ID.String() + "][" + e.Event.Date.String() + "]"
-	}
+	str += "; Event: [" + e.EventID.String() + "][" + e.EventDate.String() + "]"
 
 	return str
 }

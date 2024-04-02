@@ -4,16 +4,16 @@ import "context"
 
 type (
 	ErrorHandler func(ctx context.Context, err error)
-	Middleware   func(ctx context.Context, event Event, additional map[string]interface{}, next Handler) error
-	HandlerFunc  func(ctx context.Context, event Event, additional map[string]interface{}) error
+	Middleware   func(ctx context.Context, event Event, additional map[string]any, next Handler) error
+	HandlerFunc  func(ctx context.Context, event Event, additional map[string]any) error
 )
 
-func (h HandlerFunc) Handle(ctx context.Context, event Event, additional map[string]interface{}) error {
+func (h HandlerFunc) Handle(ctx context.Context, event Event, additional map[string]any) error {
 	return h(ctx, event, additional)
 }
 
 type Handler interface {
-	Handle(ctx context.Context, event Event, additional map[string]interface{}) error
+	Handle(ctx context.Context, event Event, additional map[string]any) error
 }
 
 type Publisher interface {

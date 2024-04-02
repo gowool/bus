@@ -28,11 +28,11 @@ func NewTracingBus(inner Bus) *TracingBus {
 }
 
 func (b *TracingBus) Publish(ctx context.Context, event Event) error {
-	ctx, span := b.tracer.Start(ctx, fmt.Sprintf("publish.Event(%s)", event.Name),
+	ctx, span := b.tracer.Start(ctx, fmt.Sprintf("publish.Event(%s)", event.Name()),
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
-			attribute.String("event_id", event.ID.String()),
-			attribute.String("event_name", event.Name),
+			attribute.String("event_id", event.ID().String()),
+			attribute.String("event_name", event.Name()),
 		),
 	)
 	defer span.End()
@@ -64,12 +64,12 @@ func (b *TracingBus) Subscribe(ctx context.Context, name string, handler Handler
 }
 
 func tracingMiddleware(tracer trace.Tracer) Middleware {
-	return func(ctx context.Context, event Event, additional map[string]interface{}, next Handler) error {
-		ctx, span := tracer.Start(ctx, fmt.Sprintf("handle.Event(%s)", event.Name),
+	return func(ctx context.Context, event Event, additional map[string]any, next Handler) error {
+		ctx, span := tracer.Start(ctx, fmt.Sprintf("handle.Event(%s)", event.Name()),
 			trace.WithSpanKind(trace.SpanKindConsumer),
 			trace.WithAttributes(
-				attribute.String("event_id", event.ID.String()),
-				attribute.String("event_name", event.Name),
+				attribute.String("event_id", event.ID().String()),
+				attribute.String("event_name", event.Name()),
 			),
 		)
 		defer span.End()

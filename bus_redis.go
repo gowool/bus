@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +25,7 @@ type RedisBus struct {
 	clientID   string
 	client     redis.UniversalClient
 	addArgs    *addArgs
-	logger     *slog.Logger
+	logError   func(err error)
 	mdws       []Middleware
 	registered map[string]struct{}
 	errCh      chan error
@@ -42,8 +41,8 @@ func NewRedisBus(client redis.UniversalClient, options ...Option) *RedisBus {
 	b := &RedisBus{
 		clientID:   xid.New().String(),
 		client:     &clientWrapper{UniversalClient: client},
-		addArgs:    &addArgs{values: map[string]interface{}{}},
-		logger:     slog.Default().WithGroup("bus"),
+		addArgs:    &addArgs{values: map[string]any{}},
+		logError:   func(error) {},
 		registered: map[string]struct{}{},
 		errCh:      make(chan error, 100),
 		ctx:        ctx,
@@ -84,17 +83,18 @@ func (b *RedisBus) Errors() <-chan error {
 }
 
 func (b *RedisBus) Publish(ctx context.Context, event Event) error {
-	if err := event.Validate(); err != nil {
+	message := newEventMessage(event)
+	if err := message.validate(); err != nil {
 		return err
 	}
 
-	data, err := json.Marshal(event)
+	data, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
 
 	args := b.addArgs.clone()
-	args.stream = event.Name
+	args.stream = message.Name
 	args.values[dataKey] = data
 
 	if err = b.client.XAdd(ctx, args.toXAddArgs()).Err(); err != nil {
@@ -141,7 +141,7 @@ func (b *RedisBus) Subscribe(ctx context.Context, name string, handler Handler) 
 	b.registered[group] = struct{}{}
 	b.wg.Add(1)
 
-	var handlerFunc HandlerFunc = func(ctx context.Context, event Event, additional map[string]interface{}) error {
+	var handlerFunc HandlerFunc = func(ctx context.Context, event Event, additional map[string]any) error {
 		return handler.Handle(ctx, event, additional)
 	}
 
@@ -149,7 +149,7 @@ func (b *RedisBus) Subscribe(ctx context.Context, name string, handler Handler) 
 		next := handlerFunc
 		pipe := b.mdws[i]
 
-		handlerFunc = func(ctx context.Context, event Event, additional map[string]interface{}) error {
+		handlerFunc = func(ctx context.Context, event Event, additional map[string]any) error {
 			return pipe(ctx, event, additional, next)
 		}
 	}
@@ -210,16 +210,18 @@ func (b *RedisBus) handle(stream, group string, h HandlerFunc) {
 
 func (b *RedisBus) handler(name, group, consumer string, h HandlerFunc) func(ctx context.Context, message redis.XMessage) {
 	return func(ctx context.Context, message redis.XMessage) {
-		busErr := NewError(name, group, consumer).SetID(message.ID)
-
 		event, additional, err := toEvent(message)
-		busErr.Event = event
+		busErr := NewError(name, group, consumer).
+			SetID(message.ID).
+			SetEventID(event.ID()).
+			SetEventDate(event.Date())
+
 		if err != nil {
 			b.error(busErr.SetErr(err))
 			return
 		}
 
-		if err = h(ctx, *event, additional); err != nil {
+		if err = h(ctx, event, additional); err != nil {
 			if !errors.Is(err, context.Canceled) {
 				err = fmt.Errorf("could not handle event (%s): %w", group, err)
 
@@ -241,6 +243,6 @@ func (b *RedisBus) error(err error) {
 	select {
 	case b.errCh <- err:
 	default:
-		b.logger.Error("missed error in Redis event bus", "error", err)
+		b.logError(err)
 	}
 }

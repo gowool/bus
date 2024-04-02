@@ -64,8 +64,8 @@ func (b *MetricsBus) Publish(ctx context.Context, event Event) error {
 	dur := time.Since(start)
 
 	attrs := make([]attribute.KeyValue, 0, 3)
-	attrs = append(attrs, attribute.String("event_id", event.ID.String()))
-	attrs = append(attrs, attribute.String("event_name", event.Name))
+	attrs = append(attrs, attribute.String("event_id", event.ID().String()))
+	attrs = append(attrs, attribute.String("event_name", event.Name()))
 	attrs = append(attrs, statusAttr(err))
 
 	b.publishTime.Record(ctx, milliseconds(dur), metric.WithAttributes(attrs...))
@@ -93,7 +93,7 @@ func (b *MetricsBus) Subscribe(ctx context.Context, name string, handler Handler
 }
 
 func metricsMiddleware(handleTime metric.Float64Histogram) Middleware {
-	return func(ctx context.Context, event Event, additional map[string]interface{}, next Handler) error {
+	return func(ctx context.Context, event Event, additional map[string]any, next Handler) error {
 		start := time.Now()
 
 		err := next.Handle(ctx, event, additional)
@@ -101,8 +101,8 @@ func metricsMiddleware(handleTime metric.Float64Histogram) Middleware {
 		dur := time.Since(start)
 
 		attrs := make([]attribute.KeyValue, 0, 3)
-		attrs = append(attrs, attribute.String("event_id", event.ID.String()))
-		attrs = append(attrs, attribute.String("event_name", event.Name))
+		attrs = append(attrs, attribute.String("event_id", event.ID().String()))
+		attrs = append(attrs, attribute.String("event_name", event.Name()))
 		attrs = append(attrs, statusAttr(err))
 
 		handleTime.Record(ctx, milliseconds(dur), metric.WithAttributes(attrs...))

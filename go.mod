@@ -1,6 +1,6 @@
 module github.com/gowool/bus
 
-go 1.22.0
+go 1.22.1
 
 require (
 	github.com/goccy/go-json v0.10.2

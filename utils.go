@@ -2,7 +2,6 @@ package bus
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"reflect"
@@ -11,6 +10,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/goccy/go-json"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -27,8 +27,12 @@ type clientWrapper struct {
 
 func (c *clientWrapper) XReadGroup(ctx context.Context, a *redis.XReadGroupArgs) *redis.XStreamSliceCmd {
 	ch := make(chan *redis.XStreamSliceCmd, 1)
+	defer close(ch)
 
 	go func() {
+		defer func() {
+			_ = recover()
+		}()
 		ch <- c.UniversalClient.XReadGroup(ctx, a)
 	}()
 
@@ -51,7 +55,7 @@ type addArgs struct {
 	approx bool
 	limit  int64
 	id     string
-	values map[string]interface{}
+	values map[string]any
 }
 
 func (a *addArgs) clone() *addArgs {
@@ -75,7 +79,7 @@ func (a *addArgs) toXAddArgs() *redis.XAddArgs {
 	}
 }
 
-func handlerName(h interface{}) string {
+func handlerName(h any) string {
 	typ := reflect.TypeOf(h)
 	if typ.Kind() == reflect.Func {
 		return strings.ReplaceAll(runtime.FuncForPC(reflect.ValueOf(h).Pointer()).Name(), ".", ":")
@@ -86,25 +90,25 @@ func handlerName(h interface{}) string {
 	return strings.ReplaceAll(typ.String(), ".", ":")
 }
 
-func toEvent(message redis.XMessage) (*Event, map[string]interface{}, error) {
-	var event Event
+func toEvent(xMessage redis.XMessage) (Event, map[string]any, error) {
+	var message eventMessage
 
-	if value, ok := message.Values[dataKey]; ok {
+	if value, ok := xMessage.Values[dataKey]; ok {
 		if data, ok := value.(string); ok {
-			if err := json.Unmarshal(unsafe.Slice(unsafe.StringData(data), len(data)), &event); err != nil {
-				return nil, nil, fmt.Errorf("event data is of incorrect type %T: %w", message.Values[dataKey], err)
+			if err := json.Unmarshal(unsafe.Slice(unsafe.StringData(data), len(data)), &message); err != nil {
+				return nil, nil, fmt.Errorf("event data is of incorrect type %T: %w", xMessage.Values[dataKey], err)
 			}
 		}
 	}
 
-	additional := maps.Clone(message.Values)
+	additional := maps.Clone(xMessage.Values)
 	delete(additional, dataKey)
 
-	if err := event.Validate(); err != nil {
-		return &event, additional, fmt.Errorf("event data is not valid: %w", err)
+	if err := message.validate(); err != nil {
+		return newEventData(message), additional, fmt.Errorf("event data is not valid: %w", err)
 	}
 
-	return &event, additional, nil
+	return newEventData(message), additional, nil
 }
 
 func milliseconds(d time.Duration) float64 {

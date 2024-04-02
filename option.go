@@ -1,7 +1,6 @@
 package bus
 
 import (
-	"log/slog"
 	"maps"
 )
 
@@ -18,10 +17,10 @@ func WithClientID(clientID string) Option {
 	}
 }
 
-func WithLogger(logger *slog.Logger) Option {
+func WithLogError(logError func(err error)) Option {
 	return func(b *RedisBus) {
-		if logger != nil {
-			b.logger = logger
+		if logError != nil {
+			b.logError = logError
 		}
 	}
 }
